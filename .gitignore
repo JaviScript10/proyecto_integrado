@@ -1,0 +1,18 @@
+# Python
+backend/__pycache__/
+backend/*.py[cod]
+backend/venv/
+backend/env/
+backend/.env
+
+# Node
+panel-admin/node_modules/
+panel-admin/dist/
+panel-admin/.env
+
+# IDEs
+.vscode/
+.idea/
+
+# Logs
+*.log
