@@ -2,8 +2,19 @@
 ClipControl Backend - Modelos de datos
 """
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, date
+from enum import Enum
+
+# ==========================================
+# ENUMS
+# ==========================================
+
+class Rol(str, Enum):
+    SUPERADMIN = "SUPERADMIN"
+    ADMIN = "ADMIN"
+    ADMIN_RRHH = "ADMIN_RRHH"
+    GUARDIA = "GUARDIA"
 
 # ==========================================
 # AUTENTICACIÓN
@@ -18,6 +29,25 @@ class LoginResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: dict
+
+# ==========================================
+# USUARIOS
+# ==========================================
+
+class UsuarioCreate(BaseModel):
+    username: str
+    password: str
+    rol: str  # 'SUPERADMIN', 'ADMIN', 'ADMIN_RRHH', 'GUARDIA'
+    nombre_completo: str
+    sucursal_id: Optional[int] = None
+    activo: bool = True
+
+class UsuarioUpdate(BaseModel):
+    username: Optional[str] = None
+    password: Optional[str] = None
+    nombre_completo: Optional[str] = None
+    sucursal_id: Optional[int] = None
+    activo: Optional[bool] = None
 
 # ==========================================
 # EMPLEADOS
@@ -60,12 +90,14 @@ class Empleado(EmpleadoBase):
 
 class EntregaCreate(BaseModel):
     empleado_id: int
-    periodo_id: int
-    sucursal_id: int
-    guardia: str
-    tipo_caja: str
-    metodo: str = "QR_CARNET"
+    periodo_id: Optional[int] = None
+    sucursal_id: Optional[int] = None
+    guardia: Optional[str] = None
+    tipo_caja: Optional[str] = None
     observaciones: Optional[str] = None
+    metodo: Optional[str] = "QR"
+    estado: Optional[str] = "COMPLETADO"
+    usuario_id: Optional[int] = None
     foto_url: Optional[str] = None
 
 class Entrega(BaseModel):
@@ -142,3 +174,10 @@ class MessageResponse(BaseModel):
     message: str
     success: bool = True
     data: Optional[dict] = None
+
+# ==========================================
+# QR MASIVO
+# ==========================================
+
+class GenerarQRMasivoRequest(BaseModel):
+    empleados_ids: Optional[List[int]] = None

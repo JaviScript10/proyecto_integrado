@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Users, Package, TrendingUp, LogOut } from 'lucide-react';
+import { Settings } from 'lucide-react';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -133,17 +134,46 @@ export default function Dashboard() {
   <p className="text-sm text-gray-600 mt-1">Gestionar empleados y nómina</p>
 </button>
 
-            <button className="p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition text-left">
-              <Package className="text-green-600 mb-2" size={32} />
-              <h4 className="font-semibold text-gray-900">Entregas</h4>
-              <p className="text-sm text-gray-600 mt-1">Ver entregas en tiempo real</p>
-            </button>
 
-            <button className="p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition text-left">
-              <TrendingUp className="text-yellow-600 mb-2" size={32} />
-              <h4 className="font-semibold text-gray-900">Reportes</h4>
-              <p className="text-sm text-gray-600 mt-1">Estadísticas y exportar datos</p>
-            </button>
+<button 
+  onClick={() => navigate('/entregas')}
+  className="p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition text-left"
+>
+  <Package className="text-green-600 mb-2" size={32} />
+  <h4 className="font-semibold text-gray-900">Entregas</h4>
+  <p className="text-sm text-gray-600 mt-1">Ver entregas en tiempo real</p>
+</button>
+
+
+<button 
+  onClick={() => navigate('/reportes')}
+  className="p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition text-left"
+>
+  <TrendingUp className="text-yellow-600 mb-2" size={32} />
+  <h4 className="font-semibold text-gray-900">Reportes</h4>
+  <p className="text-sm text-gray-600 mt-1">Estadísticas y exportar datos</p>
+</button>
+
+  <button 
+    onClick={() => navigate('/usuarios')}
+    className="p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition text-left"
+  >
+    <Users className="text-purple-600 mb-2" size={32} />
+    <h4 className="font-semibold text-gray-900">Usuarios</h4>
+    <p className="text-sm text-gray-600 mt-1">Gestionar guardias y accesos</p>
+  </button>
+
+  {/* Agregar al final de los módulos, después de Usuarios */}
+{user?.rol === 'superadmin' && (
+  <button 
+    onClick={() => navigate('/configuracion')}
+    className="p-4 border-2 border-red-200 rounded-lg hover:border-red-500 hover:bg-red-50 transition text-left"
+  >
+    <Settings className="text-red-600 mb-2" size={32} />
+    <h4 className="font-semibold text-gray-900">Configuración</h4>
+    <p className="text-sm text-gray-600 mt-1">Panel SUPERADMIN</p>
+  </button>
+)}
           </div>
         </div>
       </main>

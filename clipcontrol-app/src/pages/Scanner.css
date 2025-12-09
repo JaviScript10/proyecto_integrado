@@ -1,0 +1,172 @@
+.scanner-content {
+  --background: #f5f5f5;
+}
+
+.scanner-container {
+  padding: 20px;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+/* Scanner Active - ocultar contenido cuando se escanea */
+body.scanner-active .scanner-container {
+  visibility: hidden;
+}
+
+body.scanner-active {
+  --background: transparent;
+  --ion-background-color: transparent;
+}
+
+/* Ready State */
+.ready-state .big-icon {
+  font-size: 80px;
+  color: var(--ion-color-primary);
+  margin: 20px 0;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.ready-state h2 {
+  margin: 10px 0;
+}
+
+.ready-state p {
+  color: #666;
+  margin-bottom: 20px;
+}
+
+/* Scanning State */
+.scanning-state {
+  height: calc(100vh - 60px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+}
+
+.scan-frame {
+  width: 250px;
+  height: 250px;
+  border: 3px solid white;
+  border-radius: 20px;
+  position: relative;
+  margin-bottom: 40px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.scan-corners::before,
+.scan-corners::after {
+  content: '';
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border: 4px solid #667eea;
+}
+
+.scan-corners::before {
+  top: -3px;
+  left: -3px;
+  border-right: none;
+  border-bottom: none;
+  border-top-left-radius: 20px;
+}
+
+.scan-corners::after {
+  bottom: -3px;
+  right: -3px;
+  border-left: none;
+  border-top: none;
+  border-bottom-right-radius: 20px;
+}
+
+.scan-instruction {
+  position: absolute;
+  bottom: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: white;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Validating State */
+.validating-state {
+  padding-top: 100px;
+}
+
+.big-spinner {
+  transform: scale(2);
+  margin: 40px 0;
+}
+
+/* Employee State */
+.employee-card {
+  margin-bottom: 20px;
+}
+
+.success-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.success-icon {
+  font-size: 40px;
+}
+
+.success-header h2 {
+  margin: 0;
+  color: var(--ion-color-success);
+}
+
+.employee-info p {
+  margin: 8px 0;
+  font-size: 16px;
+}
+
+.employee-info strong {
+  color: #333;
+}
+
+/* Photo Preview */
+.photo-preview {
+  margin: 15px 0;
+}
+
+.photo-preview img {
+  width: 100%;
+  max-height: 300px;
+  object-fit: contain;
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+/* Error Message */
+.error-message {
+  background: #fee;
+  border: 1px solid #fcc;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 15px 0;
+}
+
+.error-message p {
+  margin: 0;
+  font-size: 14px;
+  text-align: center;
+}
+
+/* Action Buttons */
+.action-buttons {
+  margin-top: 20px;
+}
+
+.action-buttons ion-button {
+  margin-bottom: 10px;
+}
