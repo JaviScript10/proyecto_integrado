@@ -1,7 +1,7 @@
 """
 ClipControl Backend - API Principal
 """
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Form, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from typing import List, Optional
@@ -314,9 +314,111 @@ def get_entregas_lista(
         print(f"❌ ERROR en get_entregas_lista: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
+@app.put("/api/entregas/{entrega_id}")
+def update_entrega(entrega_id: int, datos: dict):
+    """Actualizar observaciones de una entrega"""
+    try:
+        supabase = get_supabase()
+        
+        # Verificar que la entrega existe
+        entrega = supabase.table("entregas").select("id").eq("id", entrega_id).execute()
+        if not entrega.data:
+            raise HTTPException(status_code=404, detail="Entrega no encontrada")
+        
+        # Actualizar solo observaciones
+        update_data = {}
+        if "observaciones" in datos:
+            update_data["observaciones"] = datos["observaciones"]
+        
+        result = supabase.table("entregas").update(update_data).eq("id", entrega_id).execute()
+        
+        return {"message": "Entrega actualizada correctamente", "data": result.data[0]}
+        
+    except Exception as e:
+        print(f"❌ ERROR en update_entrega: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
+@app.delete("/api/entregas/{entrega_id}")
+def delete_entrega(entrega_id: int):
+    """Cancelar/eliminar una entrega"""
+    try:
+        supabase = get_supabase()
+        
+        # Verificar que la entrega existe
+        entrega = supabase.table("entregas").select("id, qr_token_id").eq("id", entrega_id).execute()
+        if not entrega.data:
+            raise HTTPException(status_code=404, detail="Entrega no encontrada")
+        
+        entrega_data = entrega.data[0]
+        
+        # Eliminar la entrega
+        supabase.table("entregas").delete().eq("id", entrega_id).execute()
+        
+        # Opcional: Reactivar el token QR si existe
+        if entrega_data.get("qr_token_id"):
+            supabase.table("qr_tokens").update({"usado": False}).eq("id", entrega_data["qr_token_id"]).execute()
+        
+        return {"message": "Entrega cancelada correctamente"}
+        
+    except Exception as e:
+        print(f"❌ ERROR en delete_entrega: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
+@app.get("/api/entregas/estadisticas-guardia/{usuario_id}")
+def get_estadisticas_guardia(usuario_id: int):
+    """
+    Obtener estadísticas de entregas del día de un guardia específico
+    """
+    try:
+        supabase = get_supabase()
+        
+        # Obtener fecha de hoy
+        hoy = date.today().isoformat()
+        
+        # Entregas de hoy de este guardia
+        entregas_hoy = supabase.table("entregas").select("*, empleados(tipo_contrato)").eq(
+            "usuario_id", usuario_id
+        ).gte(
+            "fecha_hora", f"{hoy}T00:00:00"
+        ).execute()
+        
+        # Contar por tipo
+        total = len(entregas_hoy.data) if entregas_hoy.data else 0
+        planta = sum(1 for e in (entregas_hoy.data or []) if e.get('empleados', {}).get('tipo_contrato') == 'PLANTA')
+        plazo_fijo = total - planta
+        
+        # Última entrega
+        ultima_entrega = None
+        if entregas_hoy.data and len(entregas_hoy.data) > 0:
+            # Ordenar por fecha_hora descendente
+            entregas_ordenadas = sorted(entregas_hoy.data, key=lambda x: x.get('fecha_hora', ''), reverse=True)
+            if entregas_ordenadas:
+                ultima_fecha = entregas_ordenadas[0].get('fecha_hora')
+                if ultima_fecha:
+                    ultima_dt = datetime.fromisoformat(ultima_fecha.replace('Z', '+00:00'))
+                    ahora = datetime.now(ultima_dt.tzinfo)
+                    diferencia = int((ahora - ultima_dt).total_seconds() / 60)  # minutos
+                    ultima_entrega = {
+                        "fecha": ultima_fecha,
+                        "minutos_atras": diferencia
+                    }
+        
+        return {
+            "total_hoy": total,
+            "planta": planta,
+            "plazo_fijo": plazo_fijo,
+            "ultima_entrega": ultima_entrega
+        }
+        
+    except Exception as e:
+        print(f"❌ ERROR en get_estadisticas_guardia: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
 @app.get("/api/entregas/estadisticas")
 def get_estadisticas_entregas():
-    """Obtener estadísticas de entregas"""
+    """Obtener estadísticas completas de entregas"""
     try:
         supabase = get_supabase()
         
@@ -325,19 +427,61 @@ def get_estadisticas_entregas():
         
         # Entregas de hoy
         hoy = date.today().isoformat()
-        hoy_entregas = supabase.table("entregas") \
-            .select("id", count="exact") \
-            .gte("fecha_hora", f"{hoy}T00:00:00") \
-            .execute()
+        hoy_entregas = supabase.table("entregas").select("id", count="exact").gte(
+            "fecha_hora", f"{hoy}T00:00:00"
+        ).execute()
+        
+        # Entregas por tipo de contrato (de hoy)
+        entregas_hoy_detalle = supabase.table("entregas").select(
+            "id, empleados(tipo_contrato)"
+        ).gte("fecha_hora", f"{hoy}T00:00:00").execute()
+        
+        planta = sum(1 for e in (entregas_hoy_detalle.data or []) 
+                    if e.get('empleados', {}).get('tipo_contrato') == 'PLANTA')
+        plazo_fijo = len(entregas_hoy_detalle.data or []) - planta
         
         return {
             "total": total.count if total.count else 0,
             "hoy": hoy_entregas.count if hoy_entregas.count else 0,
-            "planta": 0,
-            "plazo_fijo": 0
+            "planta": planta,
+            "plazo_fijo": plazo_fijo
         }
     except Exception as e:
         print(f"❌ ERROR en get_estadisticas_entregas: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+    
+@app.get("/api/dashboard/estadisticas")
+def get_estadisticas_dashboard():
+    """Obtener estadísticas generales del dashboard principal"""
+    try:
+        supabase = get_supabase()
+        
+        # Total empleados activos
+        empleados = supabase.table("empleados").select("id", count="exact").eq("activo", True).execute()
+        total_empleados = empleados.count if empleados.count else 0
+        
+        # Entregas de hoy
+        hoy = date.today().isoformat()
+        entregas_hoy = supabase.table("entregas").select("id", count="exact").gte(
+            "fecha_hora", f"{hoy}T00:00:00"
+        ).execute()
+        total_hoy = entregas_hoy.count if entregas_hoy.count else 0
+        
+        # Porcentaje de entregas (empleados que ya retiraron hoy)
+        porcentaje = round((total_hoy / total_empleados * 100), 1) if total_empleados > 0 else 0
+        
+        # Pendientes (empleados que no han retirado hoy)
+        pendientes = total_empleados - total_hoy
+        
+        return {
+            "total_empleados": total_empleados,
+            "entregas_hoy": total_hoy,
+            "porcentaje": porcentaje,
+            "pendientes": pendientes
+        }
+        
+    except Exception as e:
+        print(f"❌ ERROR en get_estadisticas_dashboard: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 
@@ -469,13 +613,20 @@ def get_entregas_por_fecha(fecha_inicio: str = None, fecha_fin: str = None):
             .select("*, empleados(rut, nombre, apellido, tipo_contrato, sucursales(nombre))")
         
         if fecha_inicio:
-            query = query.gte("fecha_retiro", f"{fecha_inicio}T00:00:00")
+            query = query.gte("fecha_hora", f"{fecha_inicio}T00:00:00")
         if fecha_fin:
-            query = query.lte("fecha_retiro", f"{fecha_fin}T23:59:59")
+            query = query.lte("fecha_hora", f"{fecha_fin}T23:59:59")
         
-        result = query.order("fecha_retiro", desc=True).execute()
+        result = query.order("fecha_hora", desc=True).execute()
+        
+        # Adaptar respuesta para compatibilidad
+        for entrega in result.data:
+            if 'fecha_hora' in entrega:
+                entrega['fecha_retiro'] = entrega['fecha_hora']
+        
         return result.data
     except Exception as e:
+        print(f"❌ ERROR en get_entregas_por_fecha: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 
@@ -952,24 +1103,20 @@ def validar_qr_token(token: str, periodo_id: Optional[int] = None):
 # ==========================================
 
 @app.post("/api/entregas/registrar-seguro")
-def registrar_entrega_seguro(
-    qr_token_id: int,
-    empleado_id: int,
-    usuario_id: int,
-    periodo_id: Optional[int] = None,
-    foto_base64: Optional[str] = None,
-    dispositivo_id: Optional[str] = None,
-    ip_address: Optional[str] = None,
-    latitud: Optional[float] = None,
-    longitud: Optional[float] = None,
-    observaciones: Optional[str] = None
+async def registrar_entrega_seguro(
+    qr_token_id: int = Form(...),
+    empleado_id: int = Form(...),
+    usuario_id: int = Form(...),
+    periodo_id: Optional[int] = Form(None),
+    foto: UploadFile = File(...),
+    dispositivo_id: Optional[str] = Form(None),
+    ip_address: Optional[str] = Form(None),
+    latitud: Optional[float] = Form(None),
+    longitud: Optional[float] = Form(None),
+    observaciones: Optional[str] = Form("")
 ):
     """
-    Registrar entrega con seguridad completa:
-    - Validar token QR
-    - Marcar token como usado
-    - Guardar foto (obligatoria)
-    - Registrar metadata de seguridad
+    Registrar entrega con seguridad completa usando FormData
     """
     try:
         supabase = get_supabase()
@@ -990,9 +1137,12 @@ def registrar_entrega_seguro(
         if datetime.now(fecha_expiracion.tzinfo) > fecha_expiracion:
             raise HTTPException(status_code=400, detail="QR expirado")
         
-        # FOTO ES OBLIGATORIA
-        if not foto_base64:
-            raise HTTPException(status_code=400, detail="La foto es obligatoria para registrar la entrega")
+        # Leer foto y convertir a base64
+        foto_bytes = await foto.read()
+        import base64
+        foto_base64 = f"data:image/jpeg;base64,{base64.b64encode(foto_bytes).decode()}"
+        
+        print(f"📸 Foto recibida: {len(foto_bytes)} bytes")
         
         # Calcular duración del escaneo
         fecha_generacion = datetime.fromisoformat(token_data['fecha_generacion'].replace('Z', '+00:00'))
@@ -1037,7 +1187,7 @@ def registrar_entrega_seguro(
         
         return {
             "success": True,
-            "mensaje": "Entrega registrada exitosamente con seguridad completa",
+            "mensaje": "Entrega registrada exitosamente",
             "entrega_id": entrega_result.data[0]['id'],
             "duracion_escaneo_segundos": duracion_escaneo,
             "timestamp": datetime.now().isoformat()
@@ -1046,6 +1196,7 @@ def registrar_entrega_seguro(
     except HTTPException:
         raise
     except Exception as e:
+        print(f"❌ Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error al registrar entrega: {str(e)}")
 
 # ==========================================

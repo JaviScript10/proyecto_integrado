@@ -11,7 +11,7 @@ export default function ModalGenerarQR({ empleado, onClose }) {
   const generarQR = async () => {
     try {
       setLoading(true);
-      
+
       const response = await fetch(`http://localhost:8000/api/qr/generar/${empleado.id}?duracion_minutos=${duracion}`, {
         method: 'POST',
         headers: {
@@ -159,8 +159,34 @@ export default function ModalGenerarQR({ empleado, onClose }) {
                     <p><strong>Nombre:</strong> {qrData.qr_data.nombre}</p>
                     <p><strong>Tipo:</strong> {qrData.qr_data.tipo_contrato}</p>
                     <p><strong>Hash:</strong> {qrData.qr_data.hash}...</p>
+                    {/* AGREGAR ESTO: */}
+                    <div className="mt-3 pt-3 border-t border-gray-200">
+                      <p className="font-semibold text-gray-700 mb-2">Token del QR:</p>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded text-xs font-mono break-all">
+                          {qrData.qr_data.token}
+                        </code>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(qrData.qr_data.token);
+                            alert('Token copiado al portapapeles');
+                          }}
+                          className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-1 whitespace-nowrap"
+                          title="Copiar token"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                          Copiar
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Usa este token para ingreso manual en la app móvil
+                      </p>
+                    </div>
                   </div>
                 </div>
+
 
                 {/* Botones */}
                 <div className="mt-6 space-y-3">

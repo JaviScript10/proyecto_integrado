@@ -83,3 +83,106 @@
 .logout-button {
   margin-top: 20px;
 }
+
+.sucursal-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ion-color-light);
+  color: var(--ion-color-medium);
+}
+
+.sucursal-info ion-icon {
+  font-size: 20px;
+}
+
+.beneficio-card {
+  margin: 16px;
+}
+
+.beneficio-card ion-select {
+  width: 100%;
+  margin-top: 8px;
+}
+
+/* Estadísticas del Guardia */
+.stats-card {
+  margin: 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.stats-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+  text-align: center;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+}
+
+.stat-label {
+  font-size: 11px;
+  opacity: 0.9;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.stat-value.total {
+  color: #ffd700;
+}
+
+.stat-value.planta {
+  color: #a8e6cf;
+}
+
+.stat-value.plazo {
+  color: #ffd3b6;
+}
+
+.ultima-entrega {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.ultima-entrega ion-icon {
+  font-size: 18px;
+}
+
+.sin-entregas {
+  text-align: center;
+  font-size: 13px;
+  opacity: 0.8;
+  margin: 8px 0 0 0;
+  font-style: italic;
+}

@@ -1,12 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Search, Plus, Edit, Trash2, ArrowLeft, QrCode } from 'lucide-react';
+import { Users, Search, Plus, Edit, Trash2, ArrowLeft, QrCode, Eye } from 'lucide-react';
 import { getEmpleados, getSucursales } from '../services/api';
 import EmpleadoModal from '../components/EmpleadoModal';
 import ModalGenerarQR from '../components/ModalGenerarQR';
 import { createEmpleado, updateEmpleado } from '../services/api';
-
-// ⭐ NUEVO IMPORT
 import ModalGenerarMasivo from "../components/ModalGenerarMasivo";
 
 export default function Empleados() {
@@ -20,10 +18,13 @@ export default function Empleados() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedEmpleado, setSelectedEmpleado] = useState(null);
 
-  // ✔ EXISTENTE
+  // ⭐ NUEVO: Modal detalles
+  const [empleadoDetalles, setEmpleadoDetalles] = useState(null);
+
+  // QR Individual
   const [empleadoQR, setEmpleadoQR] = useState(null);
 
-  // ⭐ NUEVO ESTADO PARA QR MASIVO
+  // QR Masivo
   const [mostrarMasivoQR, setMostrarMasivoQR] = useState(false);
 
   useEffect(() => {
@@ -33,14 +34,7 @@ export default function Empleados() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [empRes, sucRes] = await Promise.all([
-        getEmpleados(),
-        getSucursales()
-      ]);
-
-      console.log('🔍 EMPLEADOS CARGADOS:', empRes.data);
-      console.log('🏢 SUCURSALES CARGADAS:', sucRes.data);
-
+      const [empRes, sucRes] = await Promise.all([getEmpleados(), getSucursales()]);
       setEmpleados(empRes.data);
       setSucursales(sucRes.data);
     } catch (error) {
@@ -74,17 +68,17 @@ export default function Empleados() {
     }
   };
 
+  const handleVerDetalles = (empleado) => {
+    setEmpleadoDetalles(empleado);
+  };
+
   const handleSave = async (formData, empleadoId) => {
-    console.log('💾 Guardando empleado...', { formData, empleadoId });
     try {
       if (empleadoId) {
-        console.log('✏️ Editando empleado', empleadoId);
         await updateEmpleado(empleadoId, formData);
       } else {
-        console.log('➕ Creando nuevo empleado');
         await createEmpleado(formData);
       }
-      console.log('✅ Guardado exitoso, recargando datos...');
       await loadData();
     } catch (error) {
       console.error('❌ Error al guardar:', error);
@@ -99,8 +93,8 @@ export default function Empleados() {
       emp.rut.includes(searchTerm);
 
     const matchSucursal = !filterSucursal || (() => {
-      const sucursalSeleccionada = sucursales.find(s => s.id.toString() === filterSucursal);
-      return sucursalSeleccionada && emp.sucursal === sucursalSeleccionada.nombre;
+      const suc = sucursales.find(s => s.id.toString() === filterSucursal);
+      return suc && emp.sucursal === suc.nombre;
     })();
 
     const matchTipo = !filterTipo || emp.tipo_contrato === filterTipo;
@@ -110,6 +104,7 @@ export default function Empleados() {
 
   return (
     <div className="min-h-screen bg-gray-100">
+
       {/* Header */}
       <header className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -128,7 +123,6 @@ export default function Empleados() {
               </div>
             </div>
 
-            {/* ⭐ BOTONES: QR MASIVO + NUEVO */}
             <div className="flex gap-3">
               <button
                 onClick={() => setMostrarMasivoQR(true)}
@@ -138,9 +132,9 @@ export default function Empleados() {
                 Generar QR Masivo
               </button>
 
-              <button 
+              <button
                 onClick={handleNuevo}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
               >
                 <Plus size={20} />
                 Nuevo Empleado
@@ -151,12 +145,60 @@ export default function Empleados() {
         </div>
       </header>
 
+      {/* 📊 ESTADÍSTICAS */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total Empleados</p>
+                <p className="text-3xl font-bold text-gray-900">{empleados.length}</p>
+              </div>
+              <div className="p-3 bg-blue-100 rounded-lg">
+                <Users className="text-blue-600" size={24} />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Activos</p>
+                <p className="text-3xl font-bold text-green-600">
+                  {empleados.filter(e => e.activo).length}
+                </p>
+              </div>
+              <div className="p-3 bg-green-100 rounded-lg">
+                <Users className="text-green-600" size={24} />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Inactivos</p>
+                <p className="text-3xl font-bold text-red-600">
+                  {empleados.filter(e => !e.activo).length}
+                </p>
+              </div>
+              <div className="p-3 bg-red-100 rounded-lg">
+                <Users className="text-red-600" size={24} />
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
       {/* Main */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         {/* Filtros */}
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+
             {/* Buscar */}
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">Buscar</label>
@@ -178,7 +220,7 @@ export default function Empleados() {
               <select
                 value={filterSucursal}
                 onChange={(e) => setFilterSucursal(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Todas</option>
                 {sucursales.map(s => (
@@ -193,7 +235,7 @@ export default function Empleados() {
               <select
                 value={filterTipo}
                 onChange={(e) => setFilterTipo(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Todos</option>
                 <option value="PLANTA">Planta</option>
@@ -204,7 +246,7 @@ export default function Empleados() {
           </div>
         </div>
 
-        {/* Tabla */}
+        {/* TABLA */}
         <div className="bg-white rounded-lg shadow overflow-hidden">
           {loading ? (
             <div className="p-8 text-center">
@@ -217,7 +259,7 @@ export default function Empleados() {
               <p className="text-gray-600">No se encontraron empleados</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
@@ -237,8 +279,9 @@ export default function Empleados() {
                       <td className="px-6 py-4">{empleado.rut}</td>
                       <td className="px-6 py-4">{empleado.nombre} {empleado.apellido}</td>
                       <td className="px-6 py-4">{empleado.sucursal || '-'}</td>
+
                       <td className="px-6 py-4">
-                        <span className={`px-2 py-1 text-xs rounded-full font-semibold ${
+                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
                           empleado.tipo_contrato === "PLANTA"
                             ? "bg-green-100 text-green-800"
                             : "bg-blue-100 text-blue-800"
@@ -246,9 +289,11 @@ export default function Empleados() {
                           {empleado.tipo_contrato}
                         </span>
                       </td>
+
                       <td className="px-6 py-4">{empleado.seccion || '-'}</td>
+
                       <td className="px-6 py-4">
-                        <span className={`px-2 py-1 text-xs rounded-full font-semibold ${
+                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
                           empleado.activo ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
                         }`}>
                           {empleado.activo ? "Activo" : "Inactivo"}
@@ -256,6 +301,15 @@ export default function Empleados() {
                       </td>
 
                       <td className="px-6 py-4 text-right flex justify-end gap-3">
+
+                        {/* VER DETALLES */}
+                        <button
+                          onClick={() => handleVerDetalles(empleado)}
+                          className="text-green-600 hover:text-green-900"
+                          title="Ver detalles"
+                        >
+                          <Eye size={18} />
+                        </button>
 
                         {/* EDITAR */}
                         <button
@@ -273,7 +327,7 @@ export default function Empleados() {
                           <Trash2 size={18} />
                         </button>
 
-                        {/* ✔ GENERAR QR INDIVIDUAL */}
+                        {/* QR */}
                         <button
                           onClick={() => setEmpleadoQR(empleado)}
                           className="text-green-600 hover:text-green-900"
@@ -283,7 +337,6 @@ export default function Empleados() {
                         </button>
 
                       </td>
-
                     </tr>
                   ))}
                 </tbody>
@@ -293,27 +346,7 @@ export default function Empleados() {
           )}
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-          <div className="bg-white shadow p-6 rounded-lg">
-            <p className="text-sm text-gray-600">Total Empleados</p>
-            <p className="text-2xl font-bold">{empleados.length}</p>
-          </div>
-          <div className="bg-white shadow p-6 rounded-lg">
-            <p className="text-sm text-gray-600">Activos</p>
-            <p className="text-2xl font-bold text-green-600">
-              {empleados.filter(e => e.activo).length}
-            </p>
-          </div>
-          <div className="bg-white shadow p-6 rounded-lg">
-            <p className="text-sm text-gray-600">Inactivos</p>
-            <p className="text-2xl font-bold text-red-600">
-              {empleados.filter(e => !e.activo).length}
-            </p>
-          </div>
-        </div>
-
-        {/* MODAL EDITAR/CREAR */}
+        {/* MODAL CREAR/EDITAR */}
         <EmpleadoModal
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
@@ -324,13 +357,10 @@ export default function Empleados() {
 
         {/* MODAL QR INDIVIDUAL */}
         {empleadoQR && (
-          <ModalGenerarQR
-            empleado={empleadoQR}
-            onClose={() => setEmpleadoQR(null)}
-          />
+          <ModalGenerarQR empleado={empleadoQR} onClose={() => setEmpleadoQR(null)} />
         )}
 
-        {/* ⭐ MODAL QR MASIVO */}
+        {/* MODAL QR MASIVO */}
         {mostrarMasivoQR && (
           <ModalGenerarMasivo
             empleados={empleados}
@@ -339,7 +369,97 @@ export default function Empleados() {
           />
         )}
 
+        {/* MODAL DETALLES */}
+        {empleadoDetalles && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 border-b">
+                <h2 className="text-xl font-bold text-gray-900">Detalles del Empleado</h2>
+                <button
+                  onClick={() => setEmpleadoDetalles(null)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-6 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                  <div>
+                    <label className="text-sm text-gray-700">RUT</label>
+                    <p className="font-semibold">{empleadoDetalles.rut}</p>
+                  </div>
+
+                  <div>
+                    <label className="text-sm text-gray-700">Nombre Completo</label>
+                    <p className="font-semibold">{empleadoDetalles.nombre} {empleadoDetalles.apellido}</p>
+                  </div>
+
+                  <div>
+                    <label className="text-sm text-gray-700">Email</label>
+                    <p>{empleadoDetalles.email || "No registrado"}</p>
+                  </div>
+
+                  <div>
+                    <label className="text-sm text-gray-700">Teléfono</label>
+                    <p>{empleadoDetalles.telefono || "No registrado"}</p>
+                  </div>
+
+                  <div>
+                    <label className="text-sm text-gray-700">Tipo Contrato</label>
+                    <span className={`px-3 py-1 text-xs rounded-full ${
+                      empleadoDetalles.tipo_contrato === "PLANTA"
+                        ? "bg-purple-100 text-purple-800"
+                        : "bg-orange-100 text-orange-800"
+                    }`}>
+                      {empleadoDetalles.tipo_contrato}
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="text-sm text-gray-700">Sección</label>
+                    <p>{empleadoDetalles.seccion || "No especificada"}</p>
+                  </div>
+
+                  <div>
+                    <label className="text-sm text-gray-700">Sucursal</label>
+                    <p>{empleadoDetalles.sucursal}</p>
+                  </div>
+
+                  <div>
+                    <label className="text-sm text-gray-700">Estado</label>
+                    <span className={`px-3 py-1 text-xs rounded-full ${
+                      empleadoDetalles.activo
+                        ? "bg-green-100 text-green-800"
+                        : "bg-red-100 text-red-800"
+                    }`}>
+                      {empleadoDetalles.activo ? "Activo" : "Inactivo"}
+                    </span>
+                  </div>
+
+                </div>
+
+                <div className="flex justify-end pt-4 border-t">
+                  <button
+                    onClick={() => setEmpleadoDetalles(null)}
+                    className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+
+              </div>
+
+            </div>
+          </div>
+        )}
+
       </main>
+
     </div>
   );
 }

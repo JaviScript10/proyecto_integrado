@@ -1,5 +1,6 @@
 .scanner-content {
-  --background: #f5f5f5;
+  --background: transparent !important;
+  background: transparent !important;
 }
 
 .scanner-container {
@@ -10,7 +11,8 @@
 
 /* Scanner Active - ocultar contenido cuando se escanea */
 body.scanner-active .scanner-container {
-  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 
 body.scanner-active {
@@ -169,4 +171,13 @@ body.scanner-active {
 
 .action-buttons ion-button {
   margin-bottom: 10px;
+}
+
+.scanner-active,
+body.scanner-active,
+.scanner-active ion-content,
+.scanner-active ion-app,
+.scanner-active ion-page {
+  --background: transparent !important;
+  background: transparent !important;
 }

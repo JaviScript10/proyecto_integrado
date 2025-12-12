@@ -4,20 +4,15 @@ const API_URL = 'https://montane-alvina-courageous.ngrok-free.dev/api';
 
 const api = axios.create({
   baseURL: API_URL,
-  headers: { 'Content-Type': 'application/json' },
+  headers: {
+    'ngrok-skip-browser-warning': 'true'
+    // ❌ NO poner Content-Type aquí - rompe FormData
+  },
 });
 
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('guardia_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-// Objeto con todas las funciones
 const apiService = {
-  loginGuardia: async (username: string, password: string) => {
+  // Login
+  login: async (username: string, password: string) => {
     const response = await api.post('/auth/login', { username, password });
     return response.data;
   },
@@ -29,38 +24,65 @@ const apiService = {
     return response.data;
   },
 
-registrarEntrega: async (data: {
-  qr_token_id: number;
-  empleado_id: number;
-  usuario_id: number;
-  periodo_id: number;
-  foto_base64: string;
-  dispositivo_id?: string;
-  ip_address?: string;
-  latitud?: number;
-  longitud?: number;
-  observaciones?: string;
-}) => {
-  // Convertir a query params
-  const params = new URLSearchParams();
-  params.append('qr_token_id', data.qr_token_id.toString());
-  params.append('empleado_id', data.empleado_id.toString());
-  params.append('usuario_id', data.usuario_id.toString());
-  params.append('periodo_id', data.periodo_id.toString());
-  params.append('foto_base64', data.foto_base64);
-  
-  if (data.dispositivo_id) params.append('dispositivo_id', data.dispositivo_id);
-  if (data.ip_address) params.append('ip_address', data.ip_address);
-  if (data.latitud) params.append('latitud', data.latitud.toString());
-  if (data.longitud) params.append('longitud', data.longitud.toString());
-  if (data.observaciones) params.append('observaciones', data.observaciones);
-
-  const response = await api.post(`/entregas/registrar-seguro?${params.toString()}`);
-  return response.data;
-},
-
+  // Obtener período activo
   getPeriodoActivo: async () => {
     const response = await api.get('/periodos/activo');
+    return response.data;
+  },
+
+  // Obtener sucursales
+  getSucursales: async () => {
+    const response = await api.get('/sucursales');
+    return response.data;
+  },
+
+  // Obtener estadísticas del guardia
+  getEstadisticasGuardia: async (usuario_id: number) => {
+    const response = await api.get(`/entregas/estadisticas-guardia/${usuario_id}`);
+    return response.data;
+  },
+
+  // ✅ REGISTRAR ENTREGA CON FORMDATA
+  registrarEntrega: async (data: {
+    qr_token_id: number;
+    empleado_id: number;
+    usuario_id: number;
+    periodo_id: number;
+    foto_base64: string;
+    observaciones?: string;
+  }) => {
+    console.log('🔄 Convirtiendo base64 a Blob...');
+
+    // Convertir base64 a Blob
+    const base64Data = data.foto_base64.split(',')[1];
+    const byteCharacters = atob(base64Data);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: 'image/jpeg' });
+
+    console.log('📦 Blob creado, tamaño:', blob.size, 'bytes');
+
+    // Crear FormData
+    const formData = new FormData();
+    formData.append('qr_token_id', data.qr_token_id.toString());
+    formData.append('empleado_id', data.empleado_id.toString());
+    formData.append('usuario_id', data.usuario_id.toString());
+    formData.append('periodo_id', data.periodo_id.toString());
+    formData.append('foto', blob, 'foto.jpg');
+    formData.append('observaciones', data.observaciones || '');
+
+    console.log('📤 Enviando FormData al backend...');
+
+    const response = await api.post('/entregas/registrar-seguro', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+
+    console.log('✅ Respuesta recibida:', response.data);
     return response.data;
   },
 };

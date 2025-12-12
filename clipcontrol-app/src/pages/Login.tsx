@@ -13,46 +13,46 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-  setError('');
-  
-  if (!username || !password) {
-    setError('Por favor completa todos los campos');
-    return;
-  }
+    setError('');
 
-  setLoading(true);
-
-  try {
-    console.log('🔍 Intentando login...', { username, password: '***' });
-    
-    const response = await apiService.loginGuardia(username, password);
-    
-    console.log('✅ Respuesta completa:', response);
-    console.log('✅ Usuario:', response.user);
-    console.log('✅ Rol:', response.user?.rol);
-    
-    if (response.user.rol !== 'guardia' && response.user.rol !== 'GUARDIA') {
-      setError('Solo guardias pueden acceder a esta aplicación');
-      setLoading(false);
+    if (!username || !password) {
+      setError('Por favor completa todos los campos');
       return;
     }
 
-    localStorage.setItem('guardia_token', response.access_token);
-    localStorage.setItem('guardia_user', JSON.stringify(response.user));
+    setLoading(true);
 
-    console.log('✅ Login exitoso, redirigiendo a home...');
-    history.replace('/home');
-    
-  } catch (err: any) {
-    console.error('❌ Error completo:', err);
-    console.error('❌ Error response:', err.response);
-    console.error('❌ Error data:', err.response?.data);
-    console.error('❌ Error message:', err.message);
-    setError(err.response?.data?.detail || err.message || 'Error al iniciar sesión');
-  } finally {
-    setLoading(false);
-  }
-};
+    try {
+      console.log('🔍 Intentando login...', { username, password: '***' });
+
+      const response = await apiService.login(username, password);
+
+      console.log('✅ Respuesta completa:', response);
+      console.log('✅ Usuario:', response.user);
+      console.log('✅ Rol:', response.user?.rol);
+
+      if (response.user.rol !== 'guardia' && response.user.rol !== 'GUARDIA') {
+        setError('Solo guardias pueden acceder a esta aplicación');
+        setLoading(false);
+        return;
+      }
+
+      localStorage.setItem('guardia_token', response.access_token);
+      localStorage.setItem('guardia_user', JSON.stringify(response.user));
+
+      console.log('✅ Login exitoso, redirigiendo a home...');
+      history.replace('/home');
+
+    } catch (err: any) {
+      console.error('❌ Error completo:', err);
+      console.error('❌ Error response:', err.response);
+      console.error('❌ Error data:', err.response?.data);
+      console.error('❌ Error message:', err.message);
+      setError(err.response?.data?.detail || err.message || 'Error al iniciar sesión');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <IonPage>

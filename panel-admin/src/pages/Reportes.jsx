@@ -55,31 +55,31 @@ export default function Reportes() {
     }
   };
 
-  const exportarExcel = () => {
-    // Convertir datos a CSV
-    const headers = ['ID', 'RUT', 'Nombre', 'Apellido', 'Tipo Contrato', 'Sucursal', 'Fecha Retiro'];
-    const rows = entregasPorFecha.map(e => [
-      e.id,
-      e.empleados?.rut || '',
-      e.empleados?.nombre || '',
-      e.empleados?.apellido || '',
-      e.empleados?.tipo_contrato || '',
-      e.empleados?.sucursales?.nombre || '',
-      new Date(e.fecha_retiro).toLocaleString('es-CL')
-    ]);
+const exportarExcel = () => {
+  // Convertir datos a CSV
+  const headers = ['ID', 'RUT', 'Nombre', 'Apellido', 'Tipo Contrato', 'Sucursal', 'Fecha Retiro'];
+  const rows = entregasPorFecha.map(e => [
+    e.id,
+    e.empleados?.rut || '',
+    e.empleados?.nombre || '',
+    e.empleados?.apellido || '',
+    e.empleados?.tipo_contrato || '',
+    e.empleados?.sucursales?.nombre || '',
+    new Date(e.fecha_retiro || e.fecha_hora).toLocaleString('es-CL')
+  ]);
 
-    let csvContent = headers.join(',') + '\n';
-    rows.forEach(row => {
-      csvContent += row.join(',') + '\n';
-    });
+  let csvContent = headers.join(',') + '\n';
+  rows.forEach(row => {
+    csvContent += row.join(',') + '\n';
+  });
 
-    // Descargar archivo
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `reporte_entregas_${fechaInicio}_${fechaFin}.csv`;
-    link.click();
-  };
+  // Descargar archivo
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `reporte_entregas_${fechaInicio}_${fechaFin}.csv`;
+  link.click();
+};
 
   const logout = () => {
     localStorage.removeItem('token');
@@ -284,7 +284,7 @@ return (
                         </td>
                         <td className="px-4 py-2 text-sm">{entrega.empleados?.sucursales?.nombre}</td>
                         <td className="px-4 py-2 text-sm">
-                          {new Date(entrega.fecha_retiro).toLocaleString('es-CL')}
+                          {new Date(entrega.fecha_retiro || entrega.fecha_hora).toLocaleString('es-CL')}
                         </td>
                       </tr>
                     ))}

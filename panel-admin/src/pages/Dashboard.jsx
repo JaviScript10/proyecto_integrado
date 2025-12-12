@@ -1,33 +1,62 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, Package, TrendingUp, LogOut } from 'lucide-react';
-import { Settings } from 'lucide-react';
+import { LayoutDashboard, Users, Package, TrendingUp, LogOut, Settings } from 'lucide-react';
+import api from '../services/api';
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
-  
+  const [stats, setStats] = useState({
+    total_empleados: 0,
+    entregas_hoy: 0,
+    porcentaje: 0,
+    pendientes: 0
+  });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     // Verificar si está autenticado
     const token = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
-    
+
     if (!token) {
       navigate('/login');
       return;
     }
 
     setUser(JSON.parse(userData));
+    cargarEstadisticas();
   }, [navigate]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    navigate('/login');
+  const cargarEstadisticas = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get('/dashboard/estadisticas');
+      setStats(response.data);
+    } catch (error) {
+      console.error('Error cargando estadísticas:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  if (!user) return null;
+const handleLogout = () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  navigate('/login');
+};
+
+const getRolDisplay = (rol) => {
+  const roles = {
+    'superadmin': 'Superadmin',
+    'admin': 'Admin',
+    'rh': 'Recurso Humano',
+    'guardia': 'Guardia'
+  };
+  return roles[rol?.toLowerCase()] || user.nombre_completo;
+};
+
+if (!user) return null;
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -58,9 +87,9 @@ export default function Dashboard() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Bienvenida */}
         <div className="bg-white rounded-lg shadow p-6 mb-8">
-          <h2 className="text-xl font-semibold text-gray-800 mb-2">
-            ¡Bienvenido, {user.nombre_completo}!
-          </h2>
+<h2 className="text-xl font-semibold text-gray-800 mb-2">
+  ¡Bienvenido, {getRolDisplay(user.rol)}!
+</h2>
           <p className="text-gray-600">
             Sistema de gestión de entrega de beneficios - Tresmontes Lucchetti
           </p>
@@ -73,7 +102,9 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Total Empleados</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">250</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">
+                  {loading ? '...' : stats.total_empleados}
+                </p>
               </div>
               <div className="p-3 bg-blue-100 rounded-lg">
                 <Users className="text-blue-600" size={24} />
@@ -86,7 +117,9 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Entregas Hoy</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">45</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">
+                  {loading ? '...' : stats.entregas_hoy}
+                </p>
               </div>
               <div className="p-3 bg-green-100 rounded-lg">
                 <Package className="text-green-600" size={24} />
@@ -99,7 +132,9 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Porcentaje</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">68%</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">
+                  {loading ? '...' : `${stats.porcentaje}%`}
+                </p>
               </div>
               <div className="p-3 bg-yellow-100 rounded-lg">
                 <TrendingUp className="text-yellow-600" size={24} />
@@ -112,7 +147,9 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Pendientes</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">80</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">
+                  {loading ? '...' : stats.pendientes}
+                </p>
               </div>
               <div className="p-3 bg-red-100 rounded-lg">
                 <LayoutDashboard className="text-red-600" size={24} />
@@ -125,55 +162,52 @@ export default function Dashboard() {
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-4">Módulos Disponibles</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <button 
-  onClick={() => navigate('/empleados')}
-  className="p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition text-left"
->
-  <Users className="text-blue-600 mb-2" size={32} />
-  <h4 className="font-semibold text-gray-900">Empleados</h4>
-  <p className="text-sm text-gray-600 mt-1">Gestionar empleados y nómina</p>
-</button>
+            <button
+              onClick={() => navigate('/empleados')}
+              className="p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition text-left"
+            >
+              <Users className="text-blue-600 mb-2" size={32} />
+              <h4 className="font-semibold text-gray-900">Empleados</h4>
+              <p className="text-sm text-gray-600 mt-1">Gestionar empleados y nómina</p>
+            </button>
 
+            <button
+              onClick={() => navigate('/entregas')}
+              className="p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition text-left"
+            >
+              <Package className="text-green-600 mb-2" size={32} />
+              <h4 className="font-semibold text-gray-900">Entregas</h4>
+              <p className="text-sm text-gray-600 mt-1">Ver entregas en tiempo real</p>
+            </button>
 
-<button 
-  onClick={() => navigate('/entregas')}
-  className="p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition text-left"
->
-  <Package className="text-green-600 mb-2" size={32} />
-  <h4 className="font-semibold text-gray-900">Entregas</h4>
-  <p className="text-sm text-gray-600 mt-1">Ver entregas en tiempo real</p>
-</button>
+            <button
+              onClick={() => navigate('/reportes')}
+              className="p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition text-left"
+            >
+              <TrendingUp className="text-yellow-600 mb-2" size={32} />
+              <h4 className="font-semibold text-gray-900">Reportes</h4>
+              <p className="text-sm text-gray-600 mt-1">Estadísticas y exportar datos</p>
+            </button>
 
+            <button
+              onClick={() => navigate('/usuarios')}
+              className="p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition text-left"
+            >
+              <Users className="text-purple-600 mb-2" size={32} />
+              <h4 className="font-semibold text-gray-900">Usuarios</h4>
+              <p className="text-sm text-gray-600 mt-1">Gestionar guardias y accesos</p>
+            </button>
 
-<button 
-  onClick={() => navigate('/reportes')}
-  className="p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition text-left"
->
-  <TrendingUp className="text-yellow-600 mb-2" size={32} />
-  <h4 className="font-semibold text-gray-900">Reportes</h4>
-  <p className="text-sm text-gray-600 mt-1">Estadísticas y exportar datos</p>
-</button>
-
-  <button 
-    onClick={() => navigate('/usuarios')}
-    className="p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition text-left"
-  >
-    <Users className="text-purple-600 mb-2" size={32} />
-    <h4 className="font-semibold text-gray-900">Usuarios</h4>
-    <p className="text-sm text-gray-600 mt-1">Gestionar guardias y accesos</p>
-  </button>
-
-  {/* Agregar al final de los módulos, después de Usuarios */}
-{user?.rol === 'superadmin' && (
-  <button 
-    onClick={() => navigate('/configuracion')}
-    className="p-4 border-2 border-red-200 rounded-lg hover:border-red-500 hover:bg-red-50 transition text-left"
-  >
-    <Settings className="text-red-600 mb-2" size={32} />
-    <h4 className="font-semibold text-gray-900">Configuración</h4>
-    <p className="text-sm text-gray-600 mt-1">Panel SUPERADMIN</p>
-  </button>
-)}
+            {user?.rol === 'superadmin' && (
+              <button
+                onClick={() => navigate('/configuracion')}
+                className="p-4 border-2 border-red-200 rounded-lg hover:border-red-500 hover:bg-red-50 transition text-left"
+              >
+                <Settings className="text-red-600 mb-2" size={32} />
+                <h4 className="font-semibold text-gray-900">Configuración</h4>
+                <p className="text-sm text-gray-600 mt-1">Panel SUPERADMIN</p>
+              </button>
+            )}
           </div>
         </div>
       </main>
