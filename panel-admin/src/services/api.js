@@ -72,6 +72,7 @@ export const getEntregasPorFecha = (fechaInicio, fechaFin) => {
   });
 };
 
+// USUARIOS
 export const getUsuarios = (rol = null) => {
   return api.get('/usuarios', { params: { rol } });
 };
@@ -87,8 +88,6 @@ export const updateUsuario = (id, data) => {
 export const deleteUsuario = (id) => {
   return api.delete(`/usuarios/${id}`);
 };
-
-export default api;
 
 // CONFIGURACIÓN (SUPERADMIN)
 export const getConfiguracion = () => {
@@ -116,3 +115,17 @@ export const getCajasNoRetiradas = (estado = null) => {
 export const verificarPendientes = (periodoId) => {
   return api.post(`/verificar-pendientes/${periodoId}`);
 };
+
+// Estadísticas
+export const getEstadisticasDashboard = () => {
+  return api.get('/estadisticas/dashboard');
+};
+
+// Reportes
+export const descargarReportePendientes = () => {
+  return api.get('/reportes/pendientes', {
+    responseType: 'blob'  // Importante para archivos
+  });
+};
+
+export default api;

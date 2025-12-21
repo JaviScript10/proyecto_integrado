@@ -1,14 +1,19 @@
 """
 ClipControl Backend - API Principal
 """
+
 from fastapi import FastAPI, HTTPException, Form, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from typing import List, Optional
-from datetime import datetime, date, timedelta  # ← Todo en una línea
+from datetime import datetime, date, timedelta
 import bcrypt
 import hashlib
 import secrets
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment
+from fastapi.responses import StreamingResponse
+import io
 
 from config import settings
 from database import get_supabase
@@ -21,6 +26,10 @@ from models import (
     UsuarioCreate, UsuarioUpdate,
     GenerarQRMasivoRequest,
 )
+
+# Obtener cliente de Supabase
+supabase = get_supabase()
+
 
 # Inicializar FastAPI
 app = FastAPI(
@@ -274,45 +283,59 @@ def validar_retiro(validacion: ValidarRetiroRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error en validación: {str(e)}")
 
-# ==========================================
-# ENTREGAS (CORREGIDO - SIN DUPLICADOS)
-# ==========================================
-
 @app.get("/api/entregas/lista")
 def get_entregas_lista(
     periodo_id: Optional[int] = None, 
-    sucursal_id: Optional[int] = None, 
+    sucursal_id: Optional[int] = None,
+    tipo_contrato: Optional[str] = None,
+    fecha_desde: Optional[str] = None,
+    fecha_hasta: Optional[str] = None,
     skip: int = 0, 
-    limit: int = 100
+    limit: int = 200
 ):
-    """Obtener lista de entregas con filtros"""
+    """Obtener lista de entregas con filtros combinados y rango de fechas"""
     try:
         supabase = get_supabase()
         
-        # Seleccionar con los nombres de columna correctos
+        # Consulta base
         query = supabase.table("entregas").select(
-            "*, empleados(rut, nombre, apellido, tipo_contrato, sucursales(nombre))"
+            "*, empleados!inner(*, sucursales(*))"
         )
 
-        if periodo_id:
-            query = query.eq("periodo_id", periodo_id)
-        if sucursal_id:
-            query = query.eq("sucursal_id", sucursal_id)
+        # SI HAY FILTRO DE FECHAS, NO FILTRAR POR PERÍODO
+        if fecha_desde or fecha_hasta:
+            # Solo aplicar filtros de fecha
+            if fecha_desde:
+                query = query.gte("fecha_hora", f"{fecha_desde}T00:00:00")
+            if fecha_hasta:
+                query = query.lte("fecha_hora", f"{fecha_hasta}T23:59:59")
+        else:
+            # Si NO hay fechas, filtrar por período activo
+            if periodo_id:
+                query = query.eq("periodo_id", periodo_id)
+            else:
+                periodo_activo = supabase.table("periodos_entrega").select("id").eq("activo", True).execute()
+                if periodo_activo.data:
+                    query = query.eq("periodo_id", periodo_activo.data[0]['id'])
 
-        result = query.range(skip, skip + limit - 1).order("fecha_hora", desc=True).execute()
+        # Filtros de sucursal y tipo
+        if sucursal_id:
+            query = query.eq("empleados.sucursal_id", sucursal_id)
         
-        # Adaptar respuesta para el frontend
-        for entrega in result.data:
-            if 'fecha_hora' in entrega:
-                entrega['fecha_retiro'] = entrega['fecha_hora']
-            if 'guardia' in entrega:
-                entrega['usuarios'] = {'nombre_completo': entrega['guardia']}
+        if tipo_contrato:
+            query = query.eq("empleados.tipo_contrato", tipo_contrato)
+
+        # Ejecutar query
+        result = query.order("fecha_hora", desc=True).range(skip, skip + limit - 1).execute()
+        
+        print(f"📊 Filtros: desde={fecha_desde}, hasta={fecha_hasta}, sucursal={sucursal_id}, tipo={tipo_contrato}, Resultados={len(result.data)}")
         
         return result.data
 
     except Exception as e:
-        print(f"❌ ERROR en get_entregas_lista: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+        print(f"❌ Error en backend: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error al obtener entregas: {str(e)}")
+
 
 @app.put("/api/entregas/{entrega_id}")
 def update_entrega(entrega_id: int, datos: dict):
@@ -556,29 +579,89 @@ def get_periodo_activo():
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 
-@app.post("/api/periodos", response_model=dict)
-def create_periodo(periodo: PeriodoCreate):
-    try:
-        supabase = get_supabase()
-        result = supabase.table("periodos_entrega").insert(periodo.dict()).execute()
-        return result.data[0]
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
-
+# ==========================================
 # ==========================================
 # SUCURSALES
 # ==========================================
 
 @app.get("/api/sucursales", response_model=List[dict])
-def get_sucursales():
+def get_sucursales(activa: Optional[bool] = None):
     try:
         supabase = get_supabase()
-        result = supabase.table("sucursales").select("*").eq("activa", True).execute()
+        query = supabase.table("sucursales").select("*")
+        
+        if activa is not None:
+            query = query.eq("activa", activa)
+        
+        result = query.order("nombre").execute()
         return result.data
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
+@app.post("/api/sucursales")
+async def create_sucursal(sucursal: dict):
+    try:
+        supabase = get_supabase()
+        
+        # Verificar que no exista
+        check = supabase.table("sucursales").select("id").eq("nombre", sucursal['nombre']).execute()
+        if check.data:
+            raise HTTPException(status_code=400, detail="Ya existe una sucursal con ese nombre")
+        
+        data = {
+            "nombre": sucursal['nombre'],
+            "direccion": sucursal.get('direccion'),
+            "ciudad": sucursal.get('ciudad'),
+            "activa": sucursal.get('activa', True)
+        }
+        
+        result = supabase.table("sucursales").insert(data).execute()
+        return result.data[0]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/sucursales/{sucursal_id}")
+async def update_sucursal(sucursal_id: int, sucursal: dict):
+    try:
+        supabase = get_supabase()
+        
+        data = {}
+        if 'nombre' in sucursal:
+            data['nombre'] = sucursal['nombre']
+        if 'direccion' in sucursal:
+            data['direccion'] = sucursal['direccion']
+        if 'ciudad' in sucursal:
+            data['ciudad'] = sucursal['ciudad']
+        if 'activa' in sucursal:
+            data['activa'] = sucursal['activa']
+        
+        result = supabase.table("sucursales").update(data).eq("id", sucursal_id).execute()
+        return {"message": "Sucursal actualizada correctamente", "data": result.data[0]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/sucursales/{sucursal_id}")
+async def delete_sucursal(sucursal_id: int):
+    try:
+        supabase = get_supabase()
+        
+        # Verificar que no tenga empleados
+        empleados = supabase.table("empleados").select("id", count="exact").eq("sucursal_id", sucursal_id).execute()
+        if empleados.count and empleados.count > 0:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"No puedes eliminar esta sucursal porque tiene {empleados.count} empleados asignados"
+            )
+        
+        # Desactivar en vez de eliminar
+        result = supabase.table("sucursales").update({"activa": False}).eq("id", sucursal_id).execute()
+        return {"message": "Sucursal desactivada correctamente"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 # ==========================================
 # REPORTES
 # ==========================================
@@ -605,12 +688,20 @@ def get_entregas_por_sucursal():
 
 
 @app.get("/api/reportes/entregas-por-fecha")
-def get_entregas_por_fecha(fecha_inicio: str = None, fecha_fin: str = None):
-    """Reporte de entregas filtradas por fecha"""
+def get_entregas_por_fecha(
+    fecha_inicio: str = None, 
+    fecha_fin: str = None,
+    sucursal_id: Optional[int] = None,
+    tipo_contrato: Optional[str] = None
+):
+    """Reporte de entregas filtradas por fecha, sucursal y tipo de contrato"""
     try:
         supabase = get_supabase()
-        query = supabase.table("entregas") \
-            .select("*, empleados(rut, nombre, apellido, tipo_contrato, sucursales(nombre))")
+        
+        # Obtener todas las entregas con filtros de fecha
+        query = supabase.table("entregas").select(
+            "*, empleados(id, rut, nombre, apellido, tipo_contrato, sucursal_id, sucursales(nombre))"
+        )
         
         if fecha_inicio:
             query = query.gte("fecha_hora", f"{fecha_inicio}T00:00:00")
@@ -619,12 +710,24 @@ def get_entregas_por_fecha(fecha_inicio: str = None, fecha_fin: str = None):
         
         result = query.order("fecha_hora", desc=True).execute()
         
-        # Adaptar respuesta para compatibilidad
-        for entrega in result.data:
+        # Filtrar en Python (porque Supabase no soporta filtros en relaciones anidadas)
+        entregas = result.data
+        
+        if sucursal_id:
+            entregas = [e for e in entregas if e.get('empleados', {}).get('sucursal_id') == sucursal_id]
+        
+        if tipo_contrato:
+            entregas = [e for e in entregas if e.get('empleados', {}).get('tipo_contrato') == tipo_contrato]
+        
+        # Adaptar respuesta
+        for entrega in entregas:
             if 'fecha_hora' in entrega:
                 entrega['fecha_retiro'] = entrega['fecha_hora']
         
-        return result.data
+        print(f"📊 Filtros aplicados: sucursal_id={sucursal_id}, tipo_contrato={tipo_contrato}, Total={len(entregas)}")
+        
+        return entregas
+        
     except Exception as e:
         print(f"❌ ERROR en get_entregas_por_fecha: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
@@ -1395,6 +1498,237 @@ def get_estadisticas_qr():
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.get("/api/estadisticas/dashboard")
+async def get_estadisticas_dashboard():
+    try:
+        # Obtener período activo
+        periodo_result = supabase.table("periodos_entrega").select("*").eq("activo", True).execute()
+        
+        if not periodo_result.data:
+            return {
+                "total_empleados": 0,
+                "entregas_realizadas": 0,
+                "pendientes": 0,
+                "porcentaje": 0,
+                "total_entregas": 0,
+                "periodo_activo": None
+            }
+        
+        periodo_activo = periodo_result.data[0]
+        
+        # Total empleados activos
+        emp_result = supabase.table("empleados").select("id", count="exact").eq("activo", True).execute()
+        total_empleados = emp_result.count
+        
+        # Entregas DEL PERÍODO ACTIVO (directo por periodo_id)
+        entregas_result = supabase.table("entregas").select("empleado_id").eq("periodo_id", periodo_activo['id']).execute()
+        
+        total_entregas = len(entregas_result.data)
+        empleados_que_retiraron = len(set([e['empleado_id'] for e in entregas_result.data]))
+        
+        # Pendientes
+        pendientes = total_empleados - empleados_que_retiraron
+        
+        # Porcentaje
+        porcentaje = round((empleados_que_retiraron / total_empleados * 100), 1) if total_empleados > 0 else 0
+        
+        return {
+            "total_empleados": total_empleados,
+            "entregas_realizadas": empleados_que_retiraron,
+            "pendientes": pendientes,
+            "porcentaje": porcentaje,
+            "total_entregas": total_entregas,
+            "periodo_activo": {
+                "id": periodo_activo['id'],
+                "nombre": periodo_activo['nombre'],
+                "fecha_inicio": periodo_activo['fecha_inicio'],
+                "fecha_fin": periodo_activo['fecha_fin']
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/reportes/pendientes")
+async def generar_reporte_pendientes():
+    try:
+        # Obtener período activo
+        periodo_result = supabase.table("periodos_entrega").select("*").eq("activo", True).execute()
+        if not periodo_result.data:
+            raise HTTPException(status_code=404, detail="No hay período activo")
+        
+        periodo_activo = periodo_result.data[0]
+        
+        # Todos los empleados activos
+        empleados_result = supabase.table("v_empleados_completo").select("*").eq("activo", True).execute()
+        empleados = empleados_result.data
+        
+        # Empleados que YA retiraron EN ESTE PERÍODO
+        entregas_result = supabase.table("entregas").select("empleado_id").eq("periodo_id", periodo_activo['id']).execute()
+        empleados_con_entrega = set([e['empleado_id'] for e in entregas_result.data])
+        
+        # Filtrar solo los pendientes
+        pendientes = [emp for emp in empleados if emp['id'] not in empleados_con_entrega]
+        
+        # Crear Excel
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Empleados Pendientes"
+        
+        headers = ['RUT', 'Nombre Completo', 'Sucursal', 'Tipo Contrato', 'Sección', 'Email', 'Teléfono']
+        ws.append(headers)
+        
+        header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF")
+        
+        for cell in ws[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+        
+        for emp in pendientes:
+            ws.append([
+                emp.get('rut', ''),
+                emp.get('nombre_completo', ''),
+                emp.get('sucursal', ''),
+                emp.get('tipo_contrato', ''),
+                emp.get('seccion', ''),
+                emp.get('email', ''),
+                emp.get('telefono', '')
+            ])
+        
+        for column in ws.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(cell.value)
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column_letter].width = adjusted_width
+        
+        excel_file = io.BytesIO()
+        wb.save(excel_file)
+        excel_file.seek(0)
+        
+        fecha_actual = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"pendientes_{periodo_activo['nombre']}_{fecha_actual}.xlsx"
+        
+        return StreamingResponse(
+            excel_file,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+# ============================================
+# GESTIÓN DE PERÍODOS
+# ============================================
+
+@app.get("/api/periodos")
+async def get_periodos():
+    try:
+        result = supabase.table("periodos_entrega").select("*").order("fecha_inicio", desc=True).execute()
+        return result.data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/periodos/activo")
+async def get_periodo_activo():
+    try:
+        result = supabase.table("periodos_entrega").select("*").eq("activo", True).execute()
+        if not result.data:
+            raise HTTPException(status_code=404, detail="No hay período activo")
+        return result.data[0]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/periodos")
+async def create_periodo(periodo: dict):
+    try:
+        # Desactivar otros períodos activos
+        supabase.table("periodos_entrega").update({"activo": False}).eq("activo", True).execute()
+        
+        # Crear nuevo período activo
+        data = {
+            "nombre": periodo['nombre'],
+            "fecha_inicio": periodo['fecha_inicio'],
+            "fecha_fin": periodo['fecha_fin'],
+            "activo": True
+        }
+        
+        result = supabase.table("periodos_entrega").insert(data).execute()
+        return result.data[0]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/periodos/{periodo_id}/cerrar")
+async def cerrar_periodo(periodo_id: int):
+    try:
+        # Cerrar período
+        result = supabase.table("periodos_entrega").update({"activo": False}).eq("id", periodo_id).execute()
+        return {"message": "Período cerrado correctamente", "data": result.data[0]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/periodos/{periodo_id}/activar")
+async def activar_periodo(periodo_id: int):
+    try:
+        # Desactivar otros períodos
+        supabase.table("periodos_entrega").update({"activo": False}).eq("activo", True).execute()
+        
+        # Activar el seleccionado
+        result = supabase.table("periodos_entrega").update({"activo": True}).eq("id", periodo_id).execute()
+        return {"message": "Período activado correctamente", "data": result.data[0]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================
+# ACTUALIZAR Y ELIMINAR PERÍODOS
+# ============================================
+
+@app.put("/api/periodos/{periodo_id}")
+async def update_periodo(periodo_id: int, periodo: dict):
+    try:
+        data = {}
+        if 'nombre' in periodo:
+            data['nombre'] = periodo['nombre']
+        if 'fecha_inicio' in periodo:
+            data['fecha_inicio'] = periodo['fecha_inicio']
+        if 'fecha_fin' in periodo:
+            data['fecha_fin'] = periodo['fecha_fin']
+        
+        result = supabase.table("periodos_entrega").update(data).eq("id", periodo_id).execute()
+        return {"message": "Período actualizado correctamente", "data": result.data[0]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/periodos/{periodo_id}")
+async def delete_periodo(periodo_id: int):
+    try:
+        # Verificar que no sea el período activo
+        periodo = supabase.table("periodos_entrega").select("*").eq("id", periodo_id).execute()
+        if periodo.data and periodo.data[0].get('activo'):
+            raise HTTPException(status_code=400, detail="No puedes eliminar el período activo")
+        
+        # Verificar que no tenga entregas
+        entregas = supabase.table("entregas").select("id", count="exact").eq("periodo_id", periodo_id).execute()
+        if entregas.count and entregas.count > 0:
+            raise HTTPException(status_code=400, detail="No puedes eliminar un período con entregas registradas")
+        
+        result = supabase.table("periodos_entrega").delete().eq("id", periodo_id).execute()
+        return {"message": "Período eliminado correctamente"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 
 # ==========================================
 # EJECUTAR
